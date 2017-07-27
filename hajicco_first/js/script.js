@@ -38,10 +38,10 @@
     mat4 = gl3.mat4;
     qtn = gl3.qtn;
     bufferSize = 1024;
-    gpgpuBufferSize = 64;
+    gpgpuBufferSize = 128;
 
     // const variable =========================================================
-    let DEFAULT_CAM_POSITION = [0.0, 0.0, 3.0];
+    let DEFAULT_CAM_POSITION = [0.0, 0.0, Math.sqrt(3.0)];
     let DEFAULT_CAM_CENTER   = [0.0, 0.0, 0.0];
     let DEFAULT_CAM_UP       = [0.0, 1.0, 0.0];
 
@@ -72,10 +72,10 @@
     function shaderLoader(){
         // programs
         scenePrg = gl3.program.create_from_file(
-            'shader/planePoint.vert',
-            'shader/planePoint.frag',
-            ['position', 'color', 'texCoord', 'type', 'random'],
-            [3, 4, 2, 4, 4],
+            'shader/scene.vert',
+            'shader/scene.frag',
+            ['position', 'random'],
+            [3, 4],
             ['mvpMatrix', 'positionTexture', 'time', 'globalColor'],
             ['matrix4fv', '1i', '1f', '4fv'],
             shaderLoadCheck
@@ -163,18 +163,14 @@
         canvas.height = canvasHeight;
         gWeight = gaussWeight(20, 100.0);
 
-        // tiled plane point mesh
-        let tiledPlanePointData = tiledPlanePoint(gpgpuBufferSize);
-        let tiledPlanePointVBO = [
-            gl3.create_vbo(tiledPlanePointData.position),
-            gl3.create_vbo(tiledPlanePointData.color),
-            gl3.create_vbo(tiledPlanePointData.texCoord),
-            gl3.create_vbo(tiledPlanePointData.type),
-            gl3.create_vbo(tiledPlanePointData.random)
+        // geometry
+        let geoData = geo(gpgpuBufferSize);
+        let geoVBO = [
+            gl3.create_vbo(geoData.position),
+            gl3.create_vbo(geoData.random)
         ];
-        let tiledPlaneHorizonLineIBO = gl3.create_ibo_int(tiledPlanePointData.indexHorizon);
-        let tiledPlaneCrossLineIBO = gl3.create_ibo_int(tiledPlanePointData.indexCross);
-        let tiledPlanePointLength = tiledPlanePointData.position.length / 3;
+        let geoIBO = gl3.create_ibo_int(geoData.index);
+        let geoLength = geoData.index.length;
 
         // plane mesh
         let planePosition = [
@@ -264,6 +260,14 @@
         gl.cullFace(gl.BACK);
         gl.enable(gl.BLEND);
 
+        // perspective projection
+        let cameraPosition    = DEFAULT_CAM_POSITION;
+        let centerPoint       = DEFAULT_CAM_CENTER;
+        let cameraUpDirection = DEFAULT_CAM_UP;
+        mat4.lookAt(cameraPosition, centerPoint, cameraUpDirection, vMatrix);
+        mat4.ortho(-1.0, 1.0, 1.0, -1.0, 0.1, 5.0, pMatrix);
+        mat4.multiply(pMatrix, vMatrix, vpMatrix);
+
         // rendering
         let count = 0;
         let beginTime = Date.now();
@@ -283,18 +287,6 @@
             canvas.width  = canvasWidth;
             canvas.height = canvasHeight;
 
-            // perspective projection
-            let cameraPosition    = DEFAULT_CAM_POSITION;
-            let centerPoint       = DEFAULT_CAM_CENTER;
-            let cameraUpDirection = DEFAULT_CAM_UP;
-            let camera = gl3.camera.create(
-                cameraPosition,
-                centerPoint,
-                cameraUpDirection,
-                45, canvasWidth / canvasHeight, 0.1, 10.0
-            );
-            mat4.vpFromCamera(camera, vMatrix, pMatrix, vpMatrix);
-
             // gpgpu update ---------------------------------------------------
             gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE);
             gl.bindFramebuffer(gl.FRAMEBUFFER, velocityBuffer[targetBufferNum].framebuffer);
@@ -313,18 +305,16 @@
             // render to frame buffer -----------------------------------------
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer.framebuffer);
             gl3.scene_clear([0.0, 0.0, 0.1, 1.0], 1.0);
-            gl3.scene_view(camera, 0, 0, canvasWidth, canvasHeight);
+            gl3.scene_view(null, 0, 0, canvasWidth, canvasHeight);
 
             // temp plane point draw
             scenePrg.set_program();
-            // scenePrg.set_attribute(tiledPlanePointVBO, null);
-            scenePrg.set_attribute(tiledPlanePointVBO, tiledPlaneCrossLineIBO);
+            scenePrg.set_attribute(geoVBO, geoIBO);
             mat4.identity(mMatrix);
-            mat4.rotate(mMatrix, Math.sin(nowTime), [1, 1, 0], mMatrix);
+            // mat4.rotate(mMatrix, nowTime, [1.0, 1.0, 0.0], mMatrix);
             mat4.multiply(vpMatrix, mMatrix, mvpMatrix);
-            scenePrg.push_shader([mvpMatrix, 4 + targetBufferNum, nowTime, [0.8, 0.75, 1.0, 0.5]]);
-            gl3.draw_arrays(gl.POINTS, tiledPlanePointLength);
-            gl3.draw_elements_int(gl.LINES, tiledPlanePointData.indexCross.length);
+            scenePrg.push_shader([mvpMatrix, 4 + targetBufferNum, nowTime, [0.8, 0.75, 1.0, 0.25]]);
+            gl3.draw_elements_int(gl.LINES, geoLength);
 
             // horizon gauss render to fBuffer --------------------------------
             gaussPrg.set_program();

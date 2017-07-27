@@ -1,0 +1,81 @@
+@charset "utf-8";
+
+* {
+    margin: 0px;
+    padding: 0px;
+}
+
+html, body {
+    background-color: black;
+    color: #eee;
+    font-family: Ricty, 'Ricty Diminished', Monaco, consolas, monospace;
+    font-size: 9pt;
+    text-align: center;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+#canvas {
+    background-color: black;
+    margin: 0px auto;
+}
+
+#layer {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    opacity: 1.0;
+    transition: opacity 2.0s linear;
+}
+
+#layer.disabled {
+    opacity: 0.0;
+    transition: opacity 2.0s linear;
+}
+
+#layer.none {
+    display: none;
+}
+
+#progress {
+    margin: auto auto 0px;
+    width: 100px;
+    height: 100px;
+}
+
+#start {
+    background-color: darkred;
+    border: 2px solid white;
+    line-height: 2;
+    margin: 0px auto auto;
+    width: 200px;
+    cursor: pointer;
+    transition: background-color 0.5s ease;
+}
+
+#start:hover {
+    background-color: red;
+    transition: background-color 0.5s ease;
+}
+
+#start.disabled, #start.disabled:hover {
+    background-color: #333;
+    transition: background-color 0.5s ease;
+}
+
+#texture {
+    position: absolute;
+    display: none;
+}
+
+.bufferCanvas {
+    display: block;
+    position: absolute;
+    right: 0px;
+}

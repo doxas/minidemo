@@ -10,5 +10,7 @@ void main(){
     vec4 dummy = random + time;
     vec4 p = texture2D(positionTexture, vTexCoord);
     float s = step(0.0, position.z);
-    gl_Position = mvpMatrix * vec4(position + vec3(p.xy * 0.25 * p.z * s, 0.0), 1.0);
+    float t = 1.0 - s;
+    vec3 pos = vec3(p.xy * 0.15 * p.z * s + p.yz * 0.05 * p.x * t, 0.0);
+    gl_Position = mvpMatrix * vec4(position + pos, 1.0);
 }

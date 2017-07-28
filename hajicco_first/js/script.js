@@ -28,7 +28,7 @@
 
 (() => {
     // variable ===============================================================
-    let canvas, gl, ext, run, mat4, qtn;
+    let canvas, gl, ext, run, mat4, qtn, ios;
     let scenePrg, finalPrg, noisePrg, gaussPrg, positionPrg, velocityPrg;
     let gWeight, nowTime;
     let canvasWidth, canvasHeight, bufferSize, gpgpuBufferSize;
@@ -39,6 +39,7 @@
     qtn = gl3.qtn;
     bufferSize = 1024;
     gpgpuBufferSize = 128;
+    ios = navigator.userAgent.indexOf('iPhone') > 0 || navigator.userAgent.indexOf('iPad') > 0;
 
     // const variable =========================================================
     let DEFAULT_CAM_POSITION = [0.0, 0.0, Math.sqrt(3.0)];
@@ -58,6 +59,7 @@
         ext = {};
         ext.elementIndexUint = gl.getExtension('OES_element_index_uint');
         ext.textureFloat = gl.getExtension('OES_texture_float');
+        ext.textureHalfFloat = gl.getExtension('OES_texture_half_float');
         ext.drawBuffers = gl.getExtension('WEBGL_draw_buffers');
 
         // event
@@ -66,7 +68,11 @@
             console.log(nowTime);
         }, true);
 
-        shaderLoader();
+        if(ios === true){
+            gl3.create_texture('noise.jpg', 3, shaderLoader);
+        }else{
+            shaderLoader();
+        }
     }, false);
 
     function shaderLoader(){
@@ -227,13 +233,21 @@
                 gl.bindTexture(gl.TEXTURE_2D, gl3.textures[i].texture);
             }
         }
-        let noiseBuffer = gl3.create_framebuffer(bufferSize, bufferSize, 3);
+        let noiseBuffer;
         let positionBuffer = [];
-        positionBuffer[0] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 4);
-        positionBuffer[1] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 5);
         let velocityBuffer = [];
-        velocityBuffer[0] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 6);
-        velocityBuffer[1] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 7);
+        if(ios !== true){
+            noiseBuffer = gl3.create_framebuffer(bufferSize, bufferSize, 3);
+            positionBuffer[0] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 4);
+            positionBuffer[1] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 5);
+            velocityBuffer[0] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 6);
+            velocityBuffer[1] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 7);
+        }else{
+            positionBuffer[0] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 4, ext);
+            positionBuffer[1] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 5, ext);
+            velocityBuffer[0] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 6, ext);
+            velocityBuffer[1] = gl3.create_framebuffer_float(gpgpuBufferSize, gpgpuBufferSize, 7, ext);
+        }
 
         // texture setting
         (() => {
@@ -241,17 +255,23 @@
             for(i = 0; i < 8; ++i){
                 gl.activeTexture(gl.TEXTURE0 + i);
                 gl.bindTexture(gl.TEXTURE_2D, gl3.textures[i].texture);
+                if(i === 3){
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                }
             }
         })();
 
         // noise texture
-        noisePrg.set_program();
-        noisePrg.set_attribute(planeVBO, planeIBO);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, noiseBuffer.framebuffer);
-        gl3.scene_clear([0.0, 0.0, 0.0, 1.0]);
-        gl3.scene_view(null, 0, 0, bufferSize, bufferSize);
-        noisePrg.push_shader([[bufferSize, bufferSize]]);
-        gl3.draw_elements_int(gl.TRIANGLES, planeIndex.length);
+        if(ios !== true){
+            noisePrg.set_program();
+            noisePrg.set_attribute(planeVBO, planeIBO);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, noiseBuffer.framebuffer);
+            gl3.scene_clear([0.0, 0.0, 0.0, 1.0]);
+            gl3.scene_view(null, 0, 0, bufferSize, bufferSize);
+            noisePrg.push_shader([[bufferSize, bufferSize]]);
+            gl3.draw_elements_int(gl.TRIANGLES, planeIndex.length);
+        }
 
         // gl flags
         gl.disable(gl.DEPTH_TEST);
@@ -304,16 +324,15 @@
 
             // render to frame buffer -----------------------------------------
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer.framebuffer);
-            gl3.scene_clear([0.0, 0.0, 0.1, 1.0], 1.0);
+            gl3.scene_clear([0.0, 0.0, 0.0, 1.0], 1.0);
             gl3.scene_view(null, 0, 0, canvasWidth, canvasHeight);
 
             // temp plane point draw
             scenePrg.set_program();
             scenePrg.set_attribute(geoVBO, geoIBO);
             mat4.identity(mMatrix);
-            // mat4.rotate(mMatrix, nowTime, [1.0, 1.0, 0.0], mMatrix);
             mat4.multiply(vpMatrix, mMatrix, mvpMatrix);
-            scenePrg.push_shader([mvpMatrix, 4 + targetBufferNum, nowTime, [0.8, 0.75, 1.0, 0.25]]);
+            scenePrg.push_shader([mvpMatrix, 4 + targetBufferNum, nowTime, [1.0, 1.0, 1.0, 0.5]]);
             gl3.draw_elements_int(gl.LINES, geoLength);
 
             // horizon gauss render to fBuffer --------------------------------
@@ -334,13 +353,21 @@
 
             // final scene ----------------------------------------------------
             gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl3.scene_clear([0.01, 0.005, 0.025, 1.0], 1.0);
+            gl3.scene_view(null, 0, 0, canvasWidth, canvasHeight);
+
+            scenePrg.set_program();
+            scenePrg.set_attribute(geoVBO, geoIBO);
+            mat4.identity(mMatrix);
+            mat4.multiply(vpMatrix, mMatrix, mvpMatrix);
+            scenePrg.push_shader([mvpMatrix, 4 + targetBufferNum, nowTime, [0.995, 0.985, 0.999, 0.1]]);
+            gl3.draw_elements_int(gl.LINES, geoLength);
+
             finalPrg.set_program();
             finalPrg.set_attribute(planeVBO, planeIBO);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-            gl3.scene_clear([0.01, 0.02, 0.08, 1.0], 1.0);
-            gl3.scene_view(null, 0, 0, canvasWidth, canvasHeight);
-            finalPrg.push_shader([[1.0, 1.0, 1.0, 1.0], 0, nowTime, [canvasWidth, canvasHeight]]);
-            gl3.draw_elements_int(gl.TRIANGLES, planeIndex.length);
+            // finalPrg.push_shader([[1.0, 1.0, 1.0, 1.0], 0, nowTime, [canvasWidth, canvasHeight]]);
+            // gl3.draw_elements_int(gl.TRIANGLES, planeIndex.length);
             finalPrg.push_shader([[1.0, 1.0, 1.0, 1.0], 2, nowTime, [canvasWidth, canvasHeight]]);
             gl3.draw_elements_int(gl.TRIANGLES, planeIndex.length);
 

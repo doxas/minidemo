@@ -1,16 +1,11 @@
-// post.frag ------------------------------------------------------------------
-// バリューノイズを使うと、まるで水中のようなゆらゆらシェーダも簡単に実現できま
-// す。これは乱数を使ったサンプルの一例ですが、揺らがせる強さを RGB ごとに個別に
-// 変化させたりすることも、シェーダの仕組みがわかっていれば簡単ですね。
-// ----------------------------------------------------------------------------
 precision mediump float;
 uniform sampler2D textureUnit;
-uniform vec2      resolution; // スクリーン解像度
-uniform float     time;       // 時間の経過
+uniform vec2      resolution;
+uniform float     time;
 varying vec2 vTexCoord;
-const int   oct  = 8;         // オクターブ
-const float per  = 0.5;       // パーセンテージ
-const float PI   = 3.1415926; // 円周率
+const int   oct  = 8;
+const float per  = 0.5;
+const float PI   = 3.1415926;
 
 float interpolate(float a, float b, float x){
     float f = (1.0 - cos(x * PI)) * 0.5;
@@ -44,15 +39,10 @@ float snoise(vec2 p, vec2 q, vec2 r){
            noise(vec2(p.x + r.x, p.y + r.y)) * (1.0 - q.x) * (1.0 - q.y);
 }
 void main(void){
-    // ノイズ用のシード値を時間の経過によって変化させる
     vec2 v = gl_FragCoord.st + vec2(0.0, time * 100.0);
-    // ノイズを得る
     float r = snoise(v, gl_FragCoord.st / resolution, resolution);
-    // ノイズの値を若干補正して小さめに
     float s = (r - 0.5) * 0.1;
-    // テクスチャの色（ノイズから得た値を参照時に補正値として使う）
     vec4 samplerColor = texture2D(textureUnit, vTexCoord + vec2(s));
-    // テクスチャの色にノイズの値を掛ける
     gl_FragColor = samplerColor;
 }
 

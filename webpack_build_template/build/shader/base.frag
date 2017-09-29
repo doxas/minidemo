@@ -1,6 +1,3 @@
-/* ----------------------------------------------------------------------------
- * base texture shader
- * ---------------------------------------------------------------------------- */
 precision mediump float;
 uniform vec3      eyePosition;
 uniform vec3      lightPosition;

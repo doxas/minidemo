@@ -15,8 +15,8 @@
     let renderedCallback = null;
 
     // const and flags
-    const DEBUG_MODE                 = true;  // デバッグモード
-    const POST_PROCESS               = false; // ポストプロセス有無
+    const DEBUG_MODE                 = true;
+    const POST_PROCESS               = false;
     const TEXTURE_SAMPLE_IMAGE_UNIT  = 0;
     const TEXTURE_FRAMEBUFFER_UNIT   = 1;
 
@@ -299,7 +299,6 @@
             this.ctx = this.canvas.getContext('2d');
         }
         drawGradationShadow(colorRGB){
-            // TODO: 引数で受け取る方式ではなく白で描いたほうがシェーダでいろいろできてよい
             let center = [this.canvas.width / 2, this.canvas.height / 2];
             let radius = Math.min(center[0], center[1]) * 0.9;
             let colorFill = 'rgba(' + colorRGB.join(',') + ', 0.0)';

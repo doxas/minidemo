@@ -5,7 +5,7 @@
 
 (() => {
     // variable ===============================================================
-    let gl, run, mat4, qtn, count, nowTime, camera;
+    let gl, run, mat4, qtn, count, nowTime;
     let canvas, framebuffer, canvasWidth, canvasHeight;
 
     // shader
@@ -33,7 +33,6 @@
         gl            = gl3.gl;
         mat4          = gl3.Math.Mat4;
         qtn           = gl3.Math.Qtn;
-        camera        = new InteractionCamera();
         canvasWidth   = window.innerWidth;
         canvasHeight  = window.innerHeight;
         canvas.width  = canvasWidth;
@@ -45,10 +44,6 @@
                 run = false;
             }
         }, false);
-        canvas.addEventListener('mousedown', camera.startEvent, false);
-        canvas.addEventListener('mousemove', camera.moveEvent, false);
-        canvas.addEventListener('mouseup', camera.endEvent, false);
-        canvas.addEventListener('wheel', camera.wheelEvent, false);
         if(POST_PROCESS === true){
             window.addEventListener('resize', () => {
                 if(framebuffer == null){return;}
@@ -104,8 +99,8 @@
         basePrg = gl3.createProgramFromFile(
             'shader/base.vert',
             'shader/base.frag',
-            ['position', 'normal', 'color', 'texCoord'],
-            [3, 3, 4, 2],
+            ['position', 'normal'],
+            [3, 3],
             [
                 'mMatrix', 'mvpMatrix', 'normalMatrix',
                 'eyePosition',
@@ -148,15 +143,63 @@
 
     // initialize and rendering ===============================================
     function init(){
-        // sphere
-        let sphereData = gl3.Mesh.sphere(64, 128, 1.0, [1.0, 1.0, 1.0, 1.0]);
-        let sphereVBO = [
-            gl3.createVbo(sphereData.position),
-            gl3.createVbo(sphereData.normal),
-            gl3.createVbo(sphereData.color),
-            gl3.createVbo(sphereData.texCoord)
+        // block tile
+        let blockPosition = [];
+        let blockNormal   = [];
+        let blockIndex    = [];
+        ((size, scale, height) => {
+            let w = size / 2.0;
+            let s = w * scale;
+            let t = w - s;
+            blockPosition.push(
+                -w,  w,    0.0, -w,  w,    0.0,
+                 w,  w,    0.0,  w,  w,    0.0,
+                -w, -w,    0.0, -w, -w,    0.0,
+                 w, -w,    0.0,  w, -w,    0.0,
+                -s,  s, height, -s,  s, height,
+                 s,  s, height,  s,  s, height,
+                -s, -s, height, -s, -s, height,
+                 s, -s, height,  s, -s, height,
+                -s,  s, height,
+                 s,  s, height,
+                -s, -s, height,
+                 s, -s, height
+            );
+            let v = gl3.Math.Vec3.normalize([0.0, -t, height]);
+            let e     = [  0.0,  v[2], -v[1]];
+            let up    = [ e[0],  e[1],  e[2]];
+            let right = [ e[1],  e[0],  e[2]];
+            let down  = [ e[0], -e[1],  e[2]];
+            let left  = [-e[1],  e[0],  e[2]];
+            blockNormal.push(
+                 left[0],  left[1],  left[2],    up[0],    up[1],    up[2],
+                   up[0],    up[1],    up[2], right[0], right[1], right[2],
+                 down[0],  down[1],  down[2],  left[0],  left[1],  left[2],
+                right[0], right[1], right[2],  down[0],  down[1],  down[2],
+                 left[0],  left[1],  left[2],    up[0],    up[1],    up[2],
+                   up[0],    up[1],    up[2], right[0], right[1], right[2],
+                 down[0],  down[1],  down[2],  left[0],  left[1],  left[2],
+                right[0], right[1], right[2],  down[0],  down[1],  down[2],
+                0.0, 0.0, 1.0,
+                0.0, 0.0, 1.0,
+                0.0, 0.0, 1.0,
+                0.0, 0.0, 1.0
+            );
+            blockIndex.push(
+                 1,  9,  2,  2,  9, 10,
+                 3, 11,  6,  6, 11, 14,
+                 7, 15,  4,  4, 15, 12,
+                 5, 13,  0,  0, 13,  8,
+                16, 18, 17, 17, 18, 19
+            );
+        })(2.0, 0.8, 0.1);
+
+        // block
+        let blockVBO = [
+            gl3.createVbo(blockPosition),
+            gl3.createVbo(blockNormal)
         ];
-        let sphereIBO = gl3.createIbo(sphereData.index);
+        let blockIBO = gl3.createIbo(blockIndex);
 
         // plane
         let planePosition = [
@@ -208,9 +251,9 @@
         let centerPoint    = [0.0, 0.0, 0.0];
         let upDirection    = [0.0, 1.0, 0.0];
         let lightPosition  = [2.5, 5.0, 5.0];
-        let ambientColor   = [0.075, 0.085, 0.1];
+        let ambientColor   = [1.0, 1.0, 1.0];
         let specularPower  = 0.1;
-        let globalAlpha    = 0.25;
+        let globalAlpha    = 1.0;
 
         render();
         function render(){
@@ -232,7 +275,7 @@
                 cameraPosition,
                 centerPoint,
                 upDirection,
-                60 * camera.scale,
+                60,
                 canvasWidth / canvasHeight,
                 0.1,
                 10.0,
@@ -244,13 +287,11 @@
             gl3.sceneView(0, 0, canvasWidth, canvasHeight);
             gl3.sceneClear([0.955, 0.975, 0.995, 1.0], 1.0);
 
-            // sphere rendering
+            // block rendering
             basePrg.useProgram();
-            basePrg.setAttribute(sphereVBO, sphereIBO);
+            basePrg.setAttribute(blockVBO, blockIBO);
             mat4.identity(mMatrix);
-            camera.update();
-            mMatrix = qtn.toMatIV(camera.qtn, mMatrix);
-            mat4.rotate(mMatrix, nowTime * -0.1, [0.0, 1.0, 0.0], mMatrix);
+            mat4.rotate(mMatrix, nowTime * 0.1, [0.0, 1.0, 0.0], mMatrix);
             mat4.multiply(vpMatrix, mMatrix, mvpMatrix);
             mat4.inverse(mMatrix, invMatrix);
             mat4.transpose(invMatrix, normalMatrix);
@@ -266,7 +307,7 @@
                 globalAlpha,
                 TEXTURE_SAMPLE_IMAGE_UNIT
             ]);
-            gl3.drawElements(gl.TRIANGLES, sphereData.index.length);
+            gl3.drawElements(gl.TRIANGLES, blockIndex.length);
 
             if(POST_PROCESS === true){
                 // render to canvas
@@ -314,92 +355,6 @@
         }
         getElement(){
             return this.canvas;
-        }
-    }
-
-    /**
-     * @class InteractionCamera
-     * @example
-     * let camera = new InteractionCamera();
-     * window.addEventListener('mousedown', camera.startEvent, false);
-     * window.addEventListener('mousemove', camera.moveEvent, false);
-     * window.addEventListener('mouseup', camera.endEvent, false);
-     * camera.update();
-     * mMatrix = gl3.Math.Qtn.toMat4(camera.qtn, mMatrix);
-     */
-    class InteractionCamera {
-        /**
-         * @constructor
-         */
-        constructor(){
-            this.qtn               = qtn.identity(qtn.create());
-            this.dragging          = false;
-            this.prevMouse         = [0, 0];
-            this.rotationScale     = Math.min(window.innerWidth, window.innerHeight);
-            this.rotation          = 0.0;
-            this.rotateAxis        = [0.0, 0.0, 0.0];
-            this.rotatePower       = 1.5;
-            this.rotateAttenuation = 0.9;
-            this.scale             = 1.0;
-            this.scalePower        = 0.0;
-            this.scaleAttenuation  = 0.8;
-            this.scaleMin          = 0.5;
-            this.scaleMax          = 1.5;
-            this.startEvent        = this.startEvent.bind(this);
-            this.moveEvent         = this.moveEvent.bind(this);
-            this.endEvent          = this.endEvent.bind(this);
-            this.wheelEvent        = this.wheelEvent.bind(this);
-        }
-        /**
-         * mouse down event
-         * @param {Event} eve - event object
-         */
-        startEvent(eve){
-            this.dragging = true;
-            this.prevMouse = [eve.pageX, eve.pageY];
-        }
-        /**
-         * mouse move event
-         * @param {Event} eve - event object
-         */
-        moveEvent(eve){
-            if(this.dragging !== true){return;}
-            let x = this.prevMouse[0] - eve.pageX;
-            let y = this.prevMouse[1] - eve.pageY;
-            this.rotation = Math.sqrt(x * x + y * y) / this.rotationScale * this.rotatePower;
-            this.rotateAxis[0] = y;
-            this.rotateAxis[1] = x;
-            this.prevMouse = [eve.pageX, eve.pageY];
-        }
-        /**
-         * mouse up event
-         */
-        endEvent(){
-            this.dragging = false;
-        }
-        /**
-         * wheel event
-         * @param {Event} eve - event object
-         */
-        wheelEvent(eve){
-            let w = eve.wheelDelta;
-            if(w > 0){
-                this.scalePower = 0.01;
-            }else if(w < 0){
-                this.scalePower = -0.01;
-            }
-        }
-        /**
-         * quaternion update
-         */
-        update(){
-            this.scalePower *= this.scaleAttenuation;
-            this.scale = Math.max(this.scaleMin, Math.min(this.scaleMax, this.scale + this.scalePower));
-            if(this.rotation === 0.0){return;}
-            this.rotation *= this.rotateAttenuation;
-            let q = qtn.identity(qtn.create());
-            q = qtn.rotate(this.rotation, this.rotateAxis);
-            this.qtn = qtn.multiply(this.qtn, q);
         }
     }
 })();

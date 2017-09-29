@@ -1,0 +1,36 @@
+{
+  "name": "webpack_build_template",
+  "version": "0.0.1",
+  "description": "",
+  "keywords": [
+    "webgl",
+    "glsl"
+  ],
+  "main": "./src/script.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/doxas/webpack_build_template.git"
+  },
+  "bugs": "https://github.com/doxas/webpack_build_template/issues",
+  "author": {
+    "name": "doxas",
+    "email": "admin@wgld.org",
+    "url": "http://wgld.org"
+  },
+  "devDependencies": {
+    "babel-core": "^6.24.1",
+    "babel-loader": "^7.0.0",
+    "babel-preset-es2015": "^6.24.1",
+    "browser-sync": "^2.18.8",
+    "npm-run-all": "^4.0.2",
+    "webpack": "^2.4.1"
+  },
+  "scripts": {
+    "build": "webpack -p",
+    "debug": "webpack --debug -w",
+    "jsdoc": "./node_modules/.bin/esdoc",
+    "browse": "browser-sync start --server ./build/",
+    "start": "npm-run-all -p debug browse"
+  },
+  "license": "MIT"
+}

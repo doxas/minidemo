@@ -1,11 +1,14 @@
 
 /**
  * TODO:
+ * lighting (environment mapping)
+ * background shader plane
+ * post process glare
  */
 
 (() => {
     // variable ===============================================================
-    let gl, run, mat4, qtn, count, nowTime;
+    let gl, ext, run, mat4, qtn, count, nowTime;
     let canvas, framebuffer, canvasWidth, canvasHeight;
 
     // shader
@@ -19,6 +22,7 @@
     const POST_PROCESS               = false;
     const TEXTURE_SAMPLE_IMAGE_UNIT  = 0;
     const TEXTURE_FRAMEBUFFER_UNIT   = 1;
+    const GLOBAL_TILE_SCALE          = 0.95;
 
     // onload =================================================================
     window.addEventListener('load', () => {
@@ -37,6 +41,7 @@
         canvasHeight  = window.innerHeight;
         canvas.width  = canvasWidth;
         canvas.height = canvasHeight;
+        ext = gl.getExtension('ANGLE_instanced_arrays');
 
         // event --------------------------------------------------------------
         window.addEventListener('keydown', (eve) => {
@@ -99,10 +104,11 @@
         basePrg = gl3.createProgramFromFile(
             'shader/base.vert',
             'shader/base.frag',
-            ['position', 'normal'],
-            [3, 3],
+            ['position', 'normal', 'instPosition', 'instScale'],
+            [4, 3, 2, 2],
             [
                 'mMatrix', 'mvpMatrix', 'normalMatrix',
+                'globalScale',
                 'eyePosition',
                 'lightPosition',
                 'ambient',
@@ -112,6 +118,7 @@
             ],
             [
                 'matrix4fv', 'matrix4fv', 'matrix4fv',
+                '1f',
                 '3fv',
                 '3fv',
                 '3fv',
@@ -152,18 +159,18 @@
             let s = w * scale;
             let t = w - s;
             blockPosition.push(
-                -w,  w,    0.0, -w,  w,    0.0,
-                 w,  w,    0.0,  w,  w,    0.0,
-                -w, -w,    0.0, -w, -w,    0.0,
-                 w, -w,    0.0,  w, -w,    0.0,
-                -s,  s, height, -s,  s, height,
-                 s,  s, height,  s,  s, height,
-                -s, -s, height, -s, -s, height,
-                 s, -s, height,  s, -s, height,
-                -s,  s, height,
-                 s,  s, height,
-                -s, -s, height,
-                 s, -s, height
+                -w,  w,    0.0, 0.0,  -w,  w,    0.0, 0.0,
+                 w,  w,    0.0, 0.0,   w,  w,    0.0, 0.0,
+                -w, -w,    0.0, 0.0,  -w, -w,    0.0, 0.0,
+                 w, -w,    0.0, 0.0,   w, -w,    0.0, 0.0,
+                -s,  s, height,   t,  -s,  s, height,   t,
+                 s,  s, height,   t,   s,  s, height,   t,
+                -s, -s, height,   t,  -s, -s, height,   t,
+                 s, -s, height,   t,   s, -s, height,   t,
+                -s,  s, height,   t,
+                 s,  s, height,   t,
+                -s, -s, height,   t,
+                 s, -s, height,   t
             );
             let v = gl3.Math.Vec3.normalize([0.0, -t, height]);
             let e     = [  0.0,  v[2], -v[1]];
@@ -194,12 +201,108 @@
             );
         })(2.0, 0.8, 0.1);
 
-        // block
+        // tile floor
+        let floorPosition = [];
+        let floorScale = [];
+        ((width, size) => {
+            let hw = width / 2.0;
+            let bw = width / size;
+            let bw2 = bw / 2.0;
+            let bw4 = bw / 4.0;
+            for(let i = 0; i < size; ++i){
+                let x = -hw + i * bw;
+                for(let j = 0; j < size; ++j){
+                    let y = -hw + j * bw;
+                    let type = Math.max(Math.floor(Math.random() * 10) - 3, 0);
+                    switch(type){
+                        case 0: // plane
+                            floorPosition.push(x + bw2, y + bw2);
+                            floorScale.push(1.0, 1.0);
+                            break;
+                        case 1: // vsplit
+                            floorPosition.push(x + bw4, y + bw2, x + bw2 + bw4, y + bw2);
+                            floorScale.push(0.5, 1.0, 0.5, 1.0);
+                            break;
+                        case 2: // hsplit
+                            floorPosition.push(x + bw2, y + bw4, x + bw2, y + bw2 + bw4);
+                            floorScale.push(1.0, 0.5, 1.0, 0.5);
+                            break;
+                        case 3: // vsplit left block hsplit
+                            floorPosition.push(
+                                x + bw4,       y + bw4,
+                                x + bw4,       y + bw2 + bw4,
+                                x + bw2 + bw4, y + bw2
+                            );
+                            floorScale.push(
+                                0.5, 0.5,
+                                0.5, 0.5,
+                                0.5, 1.0
+                            );
+                            break;
+                        case 4: // vsplit right block hsplit
+                            floorPosition.push(
+                                x + bw4,       y + bw2,
+                                x + bw2 + bw4, y + bw4,
+                                x + bw2 + bw4, y + bw2 + bw4
+                            );
+                            floorScale.push(
+                                0.5, 1.0,
+                                0.5, 0.5,
+                                0.5, 0.5
+                            );
+                            break;
+                        case 5: // hsplit top block vsplit
+                            floorPosition.push(
+                                x + bw4,       y + bw4,
+                                x + bw2 + bw4, y + bw4,
+                                x + bw2,       y + bw2 + bw4
+                            );
+                            floorScale.push(
+                                0.5, 0.5,
+                                0.5, 0.5,
+                                1.0, 0.5
+                            );
+                            break;
+                        case 6: // hsplit bottom block vsplit
+                            floorPosition.push(
+                                x + bw2,       y + bw4,
+                                x + bw4,       y + bw2 + bw4,
+                                x + bw2 + bw4, y + bw2 + bw4
+                            );
+                            floorScale.push(
+                                1.0, 0.5,
+                                0.5, 0.5,
+                                0.5, 0.5
+                            );
+                            break;
+                        default: // full split
+                            floorPosition.push(
+                                x + bw4,       y + bw4,
+                                x + bw2 + bw4, y + bw4,
+                                x + bw4,       y + bw2 + bw4,
+                                x + bw2 + bw4, y + bw2 + bw4
+                            );
+                            floorScale.push(
+                                0.5, 0.5,
+                                0.5, 0.5,
+                                0.5, 0.5,
+                                0.5, 0.5
+                            );
+                            break;
+                    }
+                }
+            }
+        })(20.0, 10);
+
+        // block and tile
         let blockVBO = [
             gl3.createVbo(blockPosition),
             gl3.createVbo(blockNormal)
         ];
+        let instancePositionVBO = gl3.createVbo(floorPosition);
+        let instanceScaleVBO = gl3.createVbo(floorScale);
         let blockIBO = gl3.createIbo(blockIndex);
+        let instanceCount = floorPosition.length / 2;
 
         // plane
         let planePosition = [
@@ -240,14 +343,14 @@
 
         // flags
         gl.enable(gl.DEPTH_TEST);
-        gl.enable(gl.CULL_FACE);
+        gl.disable(gl.CULL_FACE);
         gl.enable(gl.BLEND);
         gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE);
 
         // variables
         let beginTime = Date.now();
         let nowTime = 0;
-        let cameraPosition = [0.0, 0.0, 3.0];
+        let cameraPosition = [0.0, 0.0, 20.0];
         let centerPoint    = [0.0, 0.0, 0.0];
         let upDirection    = [0.0, 1.0, 0.0];
         let lightPosition  = [2.5, 5.0, 5.0];
@@ -278,7 +381,7 @@
                 60,
                 canvasWidth / canvasHeight,
                 0.1,
-                10.0,
+                50.0,
                 vMatrix, pMatrix, vpMatrix
             );
 
@@ -290,8 +393,15 @@
             // block rendering
             basePrg.useProgram();
             basePrg.setAttribute(blockVBO, blockIBO);
+            gl.bindBuffer(gl.ARRAY_BUFFER, instancePositionVBO);
+            gl.enableVertexAttribArray(basePrg.attL[2]);
+            gl.vertexAttribPointer(basePrg.attL[2], basePrg.attS[2], gl.FLOAT, false, 0, 0);
+            ext.vertexAttribDivisorANGLE(basePrg.attL[2], 1);
+            gl.bindBuffer(gl.ARRAY_BUFFER, instanceScaleVBO);
+            gl.enableVertexAttribArray(basePrg.attL[3]);
+            gl.vertexAttribPointer(basePrg.attL[3], basePrg.attS[3], gl.FLOAT, false, 0, 0);
+            ext.vertexAttribDivisorANGLE(basePrg.attL[3], 1);
             mat4.identity(mMatrix);
-            mat4.rotate(mMatrix, nowTime * 0.1, [0.0, 1.0, 0.0], mMatrix);
             mat4.multiply(vpMatrix, mMatrix, mvpMatrix);
             mat4.inverse(mMatrix, invMatrix);
             mat4.transpose(invMatrix, normalMatrix);
@@ -300,6 +410,7 @@
                 mMatrix,
                 mvpMatrix,
                 normalMatrix,
+                GLOBAL_TILE_SCALE,
                 cameraPosition,
                 lightPosition,
                 ambientColor,
@@ -307,7 +418,7 @@
                 globalAlpha,
                 TEXTURE_SAMPLE_IMAGE_UNIT
             ]);
-            gl3.drawElements(gl.TRIANGLES, blockIndex.length);
+            ext.drawElementsInstancedANGLE(gl.TRIANGLES, blockIndex.length, gl.UNSIGNED_SHORT, 0, instanceCount);
 
             if(POST_PROCESS === true){
                 // render to canvas
